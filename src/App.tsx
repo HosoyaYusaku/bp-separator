@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { 
   BrainCircuit, 
@@ -101,6 +101,24 @@ const SAMPLE_TASKS = [
   "関係部署への報告会実施"
 ];
 
+// JSON Schema Definition for Gemini
+const ANALYSIS_SCHEMA = {
+  type: SchemaType.ARRAY,
+  items: {
+    type: SchemaType.OBJECT,
+    properties: {
+      task: { type: SchemaType.STRING },
+      category: { 
+        type: SchemaType.STRING, 
+        enum: ["AI_OPTIMAL", "HYBRID", "HUMAN_ESSENTIAL"] 
+      },
+      reason: { type: SchemaType.STRING },
+      prescription: { type: SchemaType.STRING }
+    },
+    required: ["task", "category", "reason", "prescription"]
+  }
+};
+
 const SYSTEM_PROMPT = `
 あなたは冷徹かつ論理的なBPRコンサルタントです。
 ユーザーが入力した「業務概要」と「タスクリスト」を分析し、各タスクを以下の3つに分類してください。
@@ -112,17 +130,8 @@ const SYSTEM_PROMPT = `
 
 【重要：文脈補完】
 タスクが単語のみ（例：「印刷」「配布」）であっても、「業務概要」の文脈から具体的な作業内容を推測して分析してください。
-
-【出力フォーマット】
-以下のJSON配列形式のみを出力してください。Markdownのコードブロックや説明文は一切不要です。
-[
-  {
-    "task": "入力されたタスク名",
-    "category": "AI_OPTIMAL" | "HYBRID" | "HUMAN_ESSENTIAL",
-    "reason": "分類理由と文脈の解釈（50文字以内）",
-    "prescription": "具体的な改善アクション（RPA導入、Gemini活用など）"
-  }
-]
+reasonフィールドには、分類理由と文脈の解釈（50文字以内）を記述してください。
+prescriptionフィールドには、具体的な改善アクション（RPA導入、Gemini活用など）を記述してください。
 `;
 
 // --- Components ---
@@ -237,7 +246,14 @@ export default function App() {
 
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: selectedModel });
+      // Config updated to use JSON Schema
+      const model = genAI.getGenerativeModel({ 
+        model: selectedModel,
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: ANALYSIS_SCHEMA
+        }
+      });
       
       const promptText = `
 【業務概要】
@@ -250,16 +266,8 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
       const result = await model.generateContent([SYSTEM_PROMPT, promptText]);
       const text = result.response.text();
       
-      // Extract JSON from response
-      let jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const firstBracket = jsonString.indexOf('[');
-      const lastBracket = jsonString.lastIndexOf(']');
-      
-      if (firstBracket !== -1 && lastBracket !== -1) {
-        jsonString = jsonString.substring(firstBracket, lastBracket + 1);
-      }
-
-      const parsedData = JSON.parse(jsonString);
+      // Simply parse the JSON output directly
+      const parsedData = JSON.parse(text);
       setResults(parsedData);
 
     } catch (err: any) {
@@ -350,7 +358,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                    <div>
                       <span className="block font-bold text-slate-700">最適化モデル搭載</span>
                       <p className="text-xs text-slate-500 mt-1 leading-tight">
-                         選択中のモデル: {currentModelInfo?.name}
+                          選択中のモデル: {currentModelInfo?.name}
                       </p>
                    </div>
                 </div>
