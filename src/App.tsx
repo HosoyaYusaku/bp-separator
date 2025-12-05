@@ -7,25 +7,27 @@ import {
   User, 
   Play, 
   RefreshCw, 
-  AlertCircle,
-  GripVertical,
-  Plus,
-  Trash2,
-  Printer,
-  ArrowDown,
-  FileJson,
-  CheckCircle2,
-  FileText,
-  Copy,
-  Cpu,
-  ShieldCheck,
-  Wand2,
-  X,
-  Sparkles
+  AlertCircle, 
+  GripVertical, 
+  Plus, 
+  Trash2, 
+  Printer, 
+  ArrowDown, 
+  FileJson, 
+  CheckCircle2, 
+  FileText, 
+  Copy, 
+  Cpu, 
+  ShieldCheck, 
+  Wand2, 
+  X, 
+  Sparkles,
+  Globe
 } from 'lucide-react';
 
 // --- Types ---
 type Category = 'AI_OPTIMAL' | 'HYBRID' | 'HUMAN_ESSENTIAL';
+type Language = 'ja' | 'en';
 
 interface TaskItem {
   id: string;
@@ -45,7 +47,8 @@ interface AIModel {
   description: string;
 }
 
-// --- Constants ---
+// --- Constants (User Specified) ---
+// 指定された内容を忠実に維持
 const AI_MODELS: AIModel[] = [
   { 
     id: 'gemini-2.5-pro', 
@@ -70,26 +73,23 @@ const COLORS = {
     bg: 'bg-white',
     badge: 'bg-cyan-100 text-cyan-800 border border-cyan-200',
     icon: <BrainCircuit className="w-5 h-5" />,
-    label: 'AI最適 (AI_OPTIMAL)',
   },
   HYBRID: {
     border: 'border-l-8 border-l-amber-500 border-slate-200',
     bg: 'bg-white',
     badge: 'bg-amber-100 text-amber-900 border border-amber-200',
     icon: <Users className="w-5 h-5" />,
-    label: '協働 (HYBRID)',
   },
   HUMAN_ESSENTIAL: {
     border: 'border-l-8 border-l-rose-600 border-slate-200',
     bg: 'bg-white',
     badge: 'bg-rose-100 text-rose-900 border border-rose-200',
     icon: <User className="w-5 h-5" />,
-    label: '人間必須 (HUMAN)',
   }
 };
 
-const SAMPLE_CONTEXT = "市民意識調査アンケートの実施業務";
-const SAMPLE_TASKS = [
+const SAMPLE_CONTEXT_JA = "市民意識調査アンケートの実施業務";
+const SAMPLE_TASKS_JA = [
   "調査項目の検討と決定",
   "アンケート用紙のデザイン作成",
   "印刷業者への発注",
@@ -99,6 +99,19 @@ const SAMPLE_TASKS = [
   "集計結果のグラフ化",
   "報告書の執筆",
   "関係部署への報告会実施"
+];
+
+const SAMPLE_CONTEXT_EN = "Conducting a public opinion survey for citizens";
+const SAMPLE_TASKS_EN = [
+  "Discuss and decide survey questions",
+  "Design the questionnaire layout",
+  "Order printing from a vendor",
+  "Extract the mailing list of residents",
+  "Enclose and mail the surveys",
+  "Collect responses and enter data",
+  "Visualize results (create graphs)",
+  "Write the final report",
+  "Hold a briefing session for related departments"
 ];
 
 // JSON Schema Definition for Gemini
@@ -119,30 +132,144 @@ const ANALYSIS_SCHEMA = {
   }
 };
 
-const SYSTEM_PROMPT = `
-あなたは冷徹かつ論理的なBPRコンサルタントです。
-ユーザーが入力した「業務概要」と「タスクリスト」を分析し、各タスクを以下の3つに分類してください。
+// --- Localization Dictionary ---
+const TRANSLATIONS = {
+  ja: {
+    title: 'Process Separator',
+    subtitle: '業務プロセス仕分け・最適化レポート',
+    status_ready: 'READY',
+    concept_title: 'AIは「魔法の杖」ではありません',
+    concept_body: (
+      <>
+        このツールは、業務プロセスを<span className="font-bold text-cyan-700">「AI最適」</span><span className="font-bold text-amber-700">「協働」</span><span className="font-bold text-rose-700">「人間必須」</span>の3つに冷徹に仕分け（Separate）します。
+        AIへの過度な期待を排し、現実的で地に足のついたBPR（業務改革）プランを提案します。
+      </>
+    ),
+    security_badge: '高セキュリティ設計',
+    security_detail: '入力データ・APIキーはサーバーへ保存されません。ブラウザからGoogleへ直接送信されます。',
+    model_badge: '最適化モデル搭載',
+    model_detail: '選択中のモデル:',
+    config_title: 'System Configuration',
+    api_label: 'Google Gemini API Key',
+    api_warning: '⚠️ 共用PCでは使用後に削除してください',
+    api_placeholder: 'APIキーを入力',
+    model_label: 'AI Model Selection',
+    context_title: '業務概要（コンテキスト）',
+    sample_btn: 'サンプルを入力',
+    context_placeholder: '例：全社キックオフミーティングの企画・運営業務',
+    task_title: '業務フロー詳細',
+    task_help: 'ドラッグで移動 / Enterで行追加',
+    add_row: '行を追加',
+    analyze_btn: '分析実行 (RUN ANALYSIS)',
+    analyzing: '分析中 (ANALYZING)...',
+    result_title: '分析完了',
+    retry_btn: '修正して再実行',
+    print_btn: 'レポート印刷',
+    report_title: 'Analysis Report',
+    target_work: '対象業務:',
+    step: 'Step',
+    analysis_header: '分析 (Context & Reason)',
+    action_header: '処方箋 (Action)',
+    // Categories
+    cat_ai: 'AI最適 (AI_OPTIMAL)',
+    cat_hybrid: '協働 (HYBRID)',
+    cat_human: '人間必須 (HUMAN)',
+    // Errors
+    err_api: 'Gemini APIキーを入力してください。',
+    err_task: 'タスクを少なくとも1つ入力してください。',
+    err_general: '分析エラーが発生しました。',
+    err_404: 'モデルが見つかりません。',
+    // Model Translations (Fallback to original constant if used)
+    models: {
+       'gemini-2.5-pro': { name: '賢いLLM (Gemini 2.5 Pro)', desc: '最高精度。複雑な文脈理解に最適です。' },
+       'gemini-2.5-flash': { name: '普通のLLM (Gemini 2.5 Flash)', desc: '速度と精度のバランスに優れた標準モデルです。' },
+       'gemini-2.5-flash-lite': { name: 'コスパ良いLLM (Gemini 2.5 Flash Lite)', desc: 'コストパフォーマンスと応答速度に優れたモデルです。' },
+    }
+  },
+  en: {
+    title: 'Process Separator',
+    subtitle: 'Business Process Separation & Optimization Report',
+    status_ready: 'READY',
+    concept_title: 'AI is NOT a "Magic Wand"',
+    concept_body: (
+      <>
+        This tool strictly separates business processes into <span className="font-bold text-cyan-700">"AI_OPTIMAL"</span>, <span className="font-bold text-amber-700">"HYBRID"</span>, and <span className="font-bold text-rose-700">"HUMAN_ESSENTIAL"</span>.
+        It eliminates excessive expectations for AI and proposes realistic BPR (Business Process Re-engineering) plans.
+      </>
+    ),
+    security_badge: 'High Security Design',
+    security_detail: 'Input data and API keys are NOT stored on the server. Sent directly from browser to Google.',
+    model_badge: 'Optimization Model',
+    model_detail: 'Selected Model:',
+    config_title: 'System Configuration',
+    api_label: 'Google Gemini API Key',
+    api_warning: '⚠️ Remove after use on shared PCs',
+    api_placeholder: 'Enter API Key',
+    model_label: 'AI Model Selection',
+    context_title: 'Business Context',
+    sample_btn: 'Load Sample',
+    context_placeholder: 'Ex: Planning and organizing a company-wide kickoff meeting',
+    task_title: 'Workflow Details',
+    task_help: 'Drag to reorder / Enter to add row',
+    add_row: 'Add Row',
+    analyze_btn: 'RUN ANALYSIS',
+    analyzing: 'ANALYZING...',
+    result_title: 'Analysis Complete',
+    retry_btn: 'Modify & Retry',
+    print_btn: 'Print Report',
+    report_title: 'Analysis Report',
+    target_work: 'Target Process:',
+    step: 'Step',
+    analysis_header: 'Analysis (Context & Reason)',
+    action_header: 'Prescription (Action)',
+    // Categories
+    cat_ai: 'AI Optimal',
+    cat_hybrid: 'Hybrid',
+    cat_human: 'Human Essential',
+    // Errors
+    err_api: 'Please enter your Gemini API Key.',
+    err_task: 'Please enter at least one task.',
+    err_general: 'An analysis error occurred.',
+    err_404: 'Model not found.',
+    // Model Translations for English Mode
+    models: {
+       'gemini-2.5-pro': { name: 'Smart LLM (Gemini 2.5 Pro)', desc: 'Highest accuracy. Best for complex context understanding.' },
+       'gemini-2.5-flash': { name: 'Standard LLM (Gemini 2.5 Flash)', desc: 'Balanced speed and accuracy standard model.' },
+       'gemini-2.5-flash-lite': { name: 'Cost-effective LLM (Gemini 2.5 Flash Lite)', desc: 'Excellent cost performance and response speed.' },
+    }
+  }
+};
 
-【分類基準】
-1. AI_OPTIMAL: ルールベース、計算、データ処理、下書き作成などAIが高速に完遂できるもの。
-2. HYBRID: 人間の判断が必要だが、AIによる支援（分析、要約、翻訳、検知）が有効なもの。
-3. HUMAN_ESSENTIAL: 最終責任、物理的な作業、高度な対人折衝、感情的ケアが必要なもの。
+// System Prompt Generator
+const getSystemPrompt = (lang: Language) => `
+You are a cold and logical BPR consultant.
+Analyze the "Business Context" and "Task List" input by the user, and classify each task into the following three categories.
 
-【重要：文脈補完】
-タスクが単語のみ（例：「印刷」「配布」）であっても、「業務概要」の文脈から具体的な作業内容を推測して分析してください。
-reasonフィールドには、分類理由と文脈の解釈（50文字以内）を記述してください。
-prescriptionフィールドには、具体的な改善アクション（RPA導入、Gemini活用など）を記述してください。
+【Classification Criteria】
+1. AI_OPTIMAL: Tasks that AI can complete quickly, such as rule-based processing, calculation, data processing, and drafting.
+2. HYBRID: Tasks that require human judgment but where AI support (analysis, summarization, translation, detection) is effective.
+3. HUMAN_ESSENTIAL: Tasks requiring final responsibility, physical work, high-level negotiation, or emotional care.
+
+【Important: Context Completion】
+Even if a task is just a single word (e.g., "printing", "distribution"), infer the specific work content from the "Business Context".
+
+【Output Format】
+${lang === 'ja' 
+  ? '各タスクの `reason` と `prescription` は必ず【日本語】で出力してください。' 
+  : 'Output `reason` and `prescription` for each task strictly in 【English】.'
+}
 `;
 
 // --- Components ---
 
-const TaskRow = ({ item, index, onUpdate, onDelete, onEnter, isLast }: {
+const TaskRow = ({ item, index, onUpdate, onDelete, onEnter, isLast, placeholder }: {
   item: TaskItem;
   index: number;
   onUpdate: (id: string, newContent: string) => void;
   onDelete: (id: string) => void;
   onEnter: (index: number) => void;
   isLast: boolean;
+  placeholder: string;
 }) => {
   const controls = useDragControls();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -184,7 +311,7 @@ const TaskRow = ({ item, index, onUpdate, onDelete, onEnter, isLast }: {
                onDelete(item.id);
             }
           }}
-          placeholder={`タスク ${index + 1}`}
+          placeholder={`${placeholder} ${index + 1}`}
           className="w-full h-full px-4 outline-none text-slate-800 placeholder:text-slate-300 font-medium bg-transparent"
         />
       </div>
@@ -193,7 +320,7 @@ const TaskRow = ({ item, index, onUpdate, onDelete, onEnter, isLast }: {
         <button
           onClick={() => onDelete(item.id)}
           className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
-          title="行を削除"
+          title="Delete row"
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -203,6 +330,7 @@ const TaskRow = ({ item, index, onUpdate, onDelete, onEnter, isLast }: {
 };
 
 export default function App() {
+  const [lang, setLang] = useState<Language>('ja');
   const [apiKey, setApiKey] = useState('');
   const [selectedModel, setSelectedModel] = useState<string>(AI_MODELS[1].id); // Default: gemini-2.5-flash
   const [context, setContext] = useState('');
@@ -210,6 +338,8 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<AnalysisResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const t = TRANSLATIONS[lang];
 
   const handleAddTask = (index: number) => {
     const newTasks = [...tasks];
@@ -230,15 +360,20 @@ export default function App() {
   };
 
   const loadSampleData = () => {
-    setContext(SAMPLE_CONTEXT);
-    setTasks(SAMPLE_TASKS.map(t => ({ id: crypto.randomUUID(), content: t })));
+    if (lang === 'ja') {
+      setContext(SAMPLE_CONTEXT_JA);
+      setTasks(SAMPLE_TASKS_JA.map(t => ({ id: crypto.randomUUID(), content: t })));
+    } else {
+      setContext(SAMPLE_CONTEXT_EN);
+      setTasks(SAMPLE_TASKS_EN.map(t => ({ id: crypto.randomUUID(), content: t })));
+    }
   };
 
   const handleAnalyze = async () => {
     const validTasks = tasks.filter(t => t.content.trim() !== '').map(t => t.content);
     
-    if (!apiKey) return setError('Gemini APIキーを入力してください。');
-    if (validTasks.length === 0) return setError('タスクを少なくとも1つ入力してください。');
+    if (!apiKey) return setError(t.err_api);
+    if (validTasks.length === 0) return setError(t.err_task);
 
     setIsAnalyzing(true);
     setError(null);
@@ -246,7 +381,7 @@ export default function App() {
 
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
-      // Config updated to use JSON Schema
+      
       const model = genAI.getGenerativeModel({ 
         model: selectedModel,
         generationConfig: {
@@ -256,25 +391,25 @@ export default function App() {
       });
       
       const promptText = `
-【業務概要】
-${context || '指定なし（一般的な業務として解釈）'}
+【Business Context】
+${context || 'None specified'}
 
-【タスクリスト（順序通り）】
+【Task List】
 ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
       `;
       
-      const result = await model.generateContent([SYSTEM_PROMPT, promptText]);
+      // Pass the language to getSystemPrompt to instruct AI language output
+      const result = await model.generateContent([getSystemPrompt(lang), promptText]);
       const text = result.response.text();
       
-      // Simply parse the JSON output directly
       const parsedData = JSON.parse(text);
       setResults(parsedData);
 
     } catch (err: any) {
       console.error(err);
-      let msg = '分析エラーが発生しました。';
-      if (err.message.includes('API key')) msg = 'APIキーが無効です。';
-      else if (err.message.includes('404')) msg = `モデル (${selectedModel}) が見つかりません。`;
+      let msg = t.err_general;
+      if (err.message.includes('API key')) msg = t.err_api;
+      else if (err.message.includes('404')) msg = `${t.err_404} (${selectedModel})`;
       else msg += ` (${err.message})`;
       setError(msg);
     } finally {
@@ -282,7 +417,22 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
     }
   };
 
-  const currentModelInfo = AI_MODELS.find(m => m.id === selectedModel);
+  // 選択されたモデル情報を取得（元の定数から）
+  const currentModelOriginal = AI_MODELS.find(m => m.id === selectedModel);
+  
+  // 翻訳辞書に該当IDがあればそちらを、なければ元の定数情報を使用
+  // anyキャストで動的なキーアクセスを許可
+  const translatedModel = (t.models as any)[selectedModel] || { name: currentModelOriginal?.name, desc: currentModelOriginal?.description };
+
+  // Helper to get category label based on current language
+  const getCategoryLabel = (cat: Category) => {
+    switch (cat) {
+      case 'AI_OPTIMAL': return t.cat_ai;
+      case 'HYBRID': return t.cat_hybrid;
+      case 'HUMAN_ESSENTIAL': return t.cat_human;
+      default: return cat;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans print:bg-white print:p-0">
@@ -298,23 +448,42 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
               </span>
             </div>
             <h1 className="text-4xl font-black tracking-tight text-black uppercase">
-              Process Separator
+              {t.title}
             </h1>
             <p className="text-slate-600 font-medium mt-2 print:text-black">
-              業務プロセス仕分け・最適化レポート
+              {t.subtitle}
             </p>
+
+            {/* Language Switcher */}
+            <div className="flex gap-2 mt-4 print:hidden">
+                <div className="flex items-center bg-white border border-slate-300 rounded-md overflow-hidden p-1 shadow-sm">
+                    <Globe className="w-4 h-4 text-slate-400 ml-2 mr-2" />
+                    <button 
+                        onClick={() => setLang('ja')}
+                        className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${lang === 'ja' ? 'bg-black text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
+                    >
+                        日本語
+                    </button>
+                    <button 
+                        onClick={() => setLang('en')}
+                        className={`px-3 py-1 text-xs font-bold rounded-sm transition-all ${lang === 'en' ? 'bg-black text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
+                    >
+                        English
+                    </button>
+                </div>
+            </div>
           </div>
           
           <div className="text-right print:hidden">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">System Status</div>
             <div className="flex items-center justify-end space-x-2">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-              <span className="text-emerald-600 text-sm font-bold">READY</span>
+              <span className="text-emerald-600 text-sm font-bold">{t.status_ready}</span>
             </div>
           </div>
         </header>
 
-        {/* Concept & Security Card (Redesigned) */}
+        {/* Concept & Security Card */}
         <div className="print:hidden mb-10 bg-white border-l-4 border-slate-700 shadow-lg rounded-r-md overflow-hidden">
           <div className="p-6 md:p-8">
             <div className="flex flex-col md:flex-row gap-6">
@@ -323,11 +492,10 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
               <div className="flex-1 space-y-3">
                 <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                   <Wand2 className="w-6 h-6 text-slate-400" />
-                  <span className="border-b-2 border-slate-200 pb-1">AIは「魔法の杖」ではありません</span>
+                  <span className="border-b-2 border-slate-200 pb-1">{t.concept_title}</span>
                 </h3>
                 <p className="text-slate-600 leading-relaxed text-sm md:text-base">
-                  このツールは、業務プロセスを<span className="font-bold text-cyan-700">「AI最適」</span><span className="font-bold text-amber-700">「協働」</span><span className="font-bold text-rose-700">「人間必須」</span>の3つに冷徹に仕分け（Separate）します。
-                  AIへの過度な期待を排し、現実的で地に足のついたBPR（業務改革）プランを提案します。
+                  {t.concept_body}
                 </p>
               </div>
 
@@ -343,9 +511,9 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                       <ShieldCheck className="w-4 h-4" />
                    </div>
                    <div>
-                      <span className="block font-bold text-slate-700">高セキュリティ設計</span>
+                      <span className="block font-bold text-slate-700">{t.security_badge}</span>
                       <p className="text-xs text-slate-500 mt-1 leading-tight">
-                        入力データ・APIキーはサーバーへ保存されません。ブラウザからGoogleへ直接送信されます。
+                        {t.security_detail}
                       </p>
                    </div>
                 </div>
@@ -356,9 +524,9 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                       <Sparkles className="w-4 h-4" />
                    </div>
                    <div>
-                      <span className="block font-bold text-slate-700">最適化モデル搭載</span>
+                      <span className="block font-bold text-slate-700">{t.model_badge}</span>
                       <p className="text-xs text-slate-500 mt-1 leading-tight">
-                          選択中のモデル: {currentModelInfo?.name}
+                          {t.model_detail} {translatedModel.name}
                       </p>
                    </div>
                 </div>
@@ -375,16 +543,16 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
             <div className="bg-slate-50 p-6 border-2 border-slate-200 rounded-sm shadow-sm space-y-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Cpu className="w-5 h-5 text-slate-700" />
-                  <h2 className="font-bold text-slate-700 uppercase tracking-wider">System Configuration</h2>
+                  <h2 className="font-bold text-slate-700 uppercase tracking-wider">{t.config_title}</h2>
                 </div>
                 
                 <div className="grid md:grid-cols-2 gap-6">
                   {/* API Key */}
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-2 uppercase flex items-center gap-2">
-                        Google Gemini API Key
+                        {t.api_label}
                         <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 normal-case font-normal">
-                          ⚠️ 共用PCでは使用後に削除してください
+                          {t.api_warning}
                         </span>
                     </label>
                     <div className="relative">
@@ -392,14 +560,14 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                           type="password"
                           value={apiKey}
                           onChange={(e) => setApiKey(e.target.value)}
-                          placeholder="Enter API Key"
+                          placeholder={t.api_placeholder}
                           className="w-full bg-white border border-slate-300 px-4 py-2 text-sm outline-none focus:border-black transition-colors font-mono pr-10"
                       />
                       {apiKey && (
                         <button 
                           onClick={() => setApiKey('')}
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500 transition-colors p-1"
-                          title="APIキーを削除する"
+                          title="Clear API Key"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -410,7 +578,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                   {/* Model Selection */}
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">
-                        AI Model Selection
+                        {t.model_label}
                     </label>
                     <div className="relative">
                       <select
@@ -420,7 +588,8 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                       >
                         {AI_MODELS.map(model => (
                           <option key={model.id} value={model.id}>
-                            {model.name}
+                            {/* 表示テキストを言語設定に合わせて切り替え */}
+                            {(t.models as any)[model.id]?.name || model.name}
                           </option>
                         ))}
                       </select>
@@ -429,7 +598,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                       </div>
                     </div>
                     <p className="text-xs text-slate-400 mt-1">
-                      {currentModelInfo?.description}
+                      {translatedModel.desc}
                     </p>
                   </div>
                 </div>
@@ -448,21 +617,21 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                         <div className="flex justify-between items-center mb-4">
                            <h2 className="font-bold text-slate-700 flex items-center gap-2">
                                 <FileText className="w-5 h-5" />
-                                業務概要（コンテキスト）
+                                {t.context_title}
                             </h2>
                             <button 
                                 onClick={loadSampleData}
                                 className="text-xs flex items-center gap-1 text-cyan-700 hover:text-cyan-900 font-bold bg-cyan-50 px-3 py-1 rounded border border-cyan-200 hover:bg-cyan-100 transition-colors"
                             >
                                 <Copy className="w-3 h-3" />
-                                サンプルを入力
+                                {t.sample_btn}
                             </button>
                         </div>
                         <input 
                             type="text" 
                             value={context}
                             onChange={(e) => setContext(e.target.value)}
-                            placeholder="例：全社キックオフミーティングの企画・運営業務"
+                            placeholder={t.context_placeholder}
                             className="w-full border-2 border-slate-200 px-4 py-3 outline-none focus:border-black transition-colors placeholder:text-slate-300"
                         />
                     </div>
@@ -472,9 +641,9 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                         <div className="bg-slate-100 border-b border-slate-300 px-4 py-3 flex items-center justify-between">
                             <h2 className="font-bold text-slate-700 flex items-center gap-2">
                                 <ArrowDown className="w-4 h-4" />
-                                業務フロー詳細
+                                {t.task_title}
                             </h2>
-                            <span className="text-xs text-slate-500">ドラッグで移動 / Enterで行追加</span>
+                            <span className="text-xs text-slate-500">{t.task_help}</span>
                         </div>
                         
                         <div className="p-4 bg-slate-50/50">
@@ -488,6 +657,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                                         onDelete={handleDeleteTask}
                                         onEnter={handleAddTask}
                                         isLast={index === tasks.length - 1}
+                                        placeholder={lang === 'ja' ? 'タスク' : 'Task'}
                                     />
                                 ))}
                             </Reorder.Group>
@@ -497,7 +667,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                                 className="mt-2 w-full py-3 flex items-center justify-center border-2 border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all font-medium rounded-sm"
                             >
                                 <Plus className="w-4 h-4 mr-2" />
-                                行を追加
+                                {t.add_row}
                             </button>
                         </div>
                     </div>
@@ -516,7 +686,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                             className="relative overflow-hidden group bg-black text-white px-8 py-4 font-bold text-lg tracking-wide hover:bg-slate-800 disabled:bg-slate-400 transition-all shadow-lg active:translate-y-0.5"
                         >
                             <span className="relative z-10 flex items-center">
-                                {isAnalyzing ? 'ANALYZING...' : 'RUN ANALYSIS'}
+                                {isAnalyzing ? t.analyzing : t.analyze_btn}
                                 {!isAnalyzing && <Play className="w-5 h-5 ml-2 fill-white" />}
                             </span>
                         </button>
@@ -530,7 +700,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
         {isAnalyzing && (
             <div className="py-20 flex flex-col items-center justify-center">
                 <div className="w-16 h-16 border-4 border-slate-200 border-t-black rounded-full animate-spin mb-6"></div>
-                <p className="font-mono text-lg tracking-widest text-slate-500 animate-pulse">Running AI Analysis...</p>
+                <p className="font-mono text-lg tracking-widest text-slate-500 animate-pulse">{t.analyzing}</p>
             </div>
         )}
 
@@ -542,7 +712,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                 className="space-y-8"
             >
                 <div className="flex items-center justify-between print:hidden bg-slate-100 p-4 rounded-lg border border-slate-200">
-                    <p className="text-sm font-medium text-slate-600">分析完了</p>
+                    <p className="text-sm font-medium text-slate-600">{t.result_title}</p>
                     <div className="flex gap-3">
                         <button
                             onClick={() => {
@@ -552,14 +722,14 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                             className="flex items-center px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm transition-colors"
                         >
                             <RefreshCw className="w-4 h-4 mr-2" />
-                            修正して再実行
+                            {t.retry_btn}
                         </button>
                         <button
                             onClick={() => window.print()}
                             className="flex items-center px-4 py-2 text-sm font-bold text-white bg-black hover:bg-slate-800 shadow-sm transition-colors"
                         >
                             <Printer className="w-4 h-4 mr-2" />
-                            レポート印刷
+                            {t.print_btn}
                         </button>
                     </div>
                 </div>
@@ -568,9 +738,9 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                     <div className="hidden print:block mb-6 border-b-2 border-black pb-4">
                         <div className="flex justify-between items-end">
                             <div>
-                                <h2 className="text-2xl font-black uppercase">Analysis Report</h2>
-                                {context && <p className="text-lg font-bold mt-1">対象業務: {context}</p>}
-                                <p className="text-sm text-slate-500 mt-1">AI Model: {currentModelInfo?.name}</p>
+                                <h2 className="text-2xl font-black uppercase">{t.report_title}</h2>
+                                {context && <p className="text-lg font-bold mt-1">{t.target_work} {context}</p>}
+                                <p className="text-sm text-slate-500 mt-1">AI Model: {translatedModel.name}</p>
                             </div>
                             <p className="text-sm text-slate-600">{new Date().toLocaleDateString()}</p>
                         </div>
@@ -594,7 +764,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                                         </div>
                                         <div>
                                             <span className="block text-xs font-bold text-slate-400 uppercase tracking-widest print:text-black">
-                                                Step {String(index + 1).padStart(2, '0')}
+                                                {t.step} {String(index + 1).padStart(2, '0')}
                                             </span>
                                             <h3 className="text-xl font-bold text-slate-900 print:text-black">
                                                 {result.task}
@@ -606,7 +776,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                                         ${style.badge}
                                         print:border print:border-black print:bg-white print:text-black
                                     `}>
-                                        {style.label}
+                                        {getCategoryLabel(result.category)}
                                     </div>
                                 </div>
 
@@ -614,7 +784,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                                     <div className="print:border-r print:border-slate-300 print:pr-4">
                                         <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center print:text-black">
                                             <div className="w-1.5 h-1.5 bg-slate-400 mr-2 rounded-full print:bg-black"></div>
-                                            分析 (Context & Reason)
+                                            {t.analysis_header}
                                         </h4>
                                         <p className="text-sm leading-relaxed font-medium text-slate-700 print:text-black">
                                             {result.reason}
@@ -623,7 +793,7 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                                     <div>
                                         <h4 className="text-xs font-bold text-cyan-600 uppercase mb-2 flex items-center print:text-black">
                                             <CheckCircle2 className="w-3 h-3 mr-2" />
-                                            処方箋 (Action)
+                                            {t.action_header}
                                         </h4>
                                         <p className="text-sm leading-relaxed font-medium text-slate-900 print:text-black">
                                             {result.prescription}
