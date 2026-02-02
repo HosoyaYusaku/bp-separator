@@ -48,7 +48,7 @@ This application runs entirely in your browser using React and the Google Gemini
 
 1. Clone the repository:
    ```bash
-   git clone [https://github.com/HosoyaYusaku/bp-separator.git](https://github.com/HosoyaYusaku/bp-separator.git)
+   git clone https://github.com/HosoyaYusaku/bp-separator.git
    cd bp-separator
    ```
 2. Install dependencies:
@@ -135,7 +135,7 @@ Google Gemini API を活用し、入力された業務タスクを\*\*「AI 最�
 1.  リポジトリをクローン:
 
     ```bash
-    git clone [https://github.com/HosoyaYusaku/bp-separator.git](https://github.com/HosoyaYusaku/bp-separator.git)
+    git clone https://github.com/HosoyaYusaku/bp-separator.git
     cd bp-separator
     ```
 
