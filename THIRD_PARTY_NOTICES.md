@@ -12,11 +12,6 @@ This project uses the following third-party software. We thank the authors and c
 - **Source**: https://github.com/vitejs/vite
 - **Copyright**: (c) 2019-present Evan You & Vite Contributors
 
-## Google Generative AI SDK for Node.js
-- **License**: Apache-2.0
-- **Source**: https://github.com/google/google-auth-library-nodejs
-- **Copyright**: Copyright 2023 Google LLC
-
 ## Tailwind CSS
 - **License**: MIT
 - **Source**: https://github.com/tailwindlabs/tailwindcss

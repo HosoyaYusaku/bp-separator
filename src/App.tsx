@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { useState, useEffect, useRef } from 'react';
+import { AI_PROVIDERS, generateJson, type AIProvider } from './ai';
+import { ANALYSIS_SCHEMA, readAnalysis, type AnalysisResult, type Category } from './analysis';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { 
   BrainCircuit, 
@@ -26,7 +27,6 @@ import {
 } from 'lucide-react';
 
 // --- Types ---
-type Category = 'AI_OPTIMAL' | 'HYBRID' | 'HUMAN_ESSENTIAL';
 type Language = 'ja' | 'en';
 
 interface TaskItem {
@@ -34,38 +34,7 @@ interface TaskItem {
   content: string;
 }
 
-interface AnalysisResult {
-  task: string;
-  category: Category;
-  reason: string;
-  prescription: string;
-}
 
-interface AIModel {
-  id: string;
-  name: string;
-  description: string;
-}
-
-// --- Constants (User Specified) ---
-// 指定された内容を忠実に維持
-const AI_MODELS: AIModel[] = [
-  { 
-    id: 'gemini-2.5-pro', 
-    name: '賢いLLM (Gemini 2.5 Pro)', 
-    description: '最高精度。複雑な文脈理解に最適です。' 
-  },
-  { 
-    id: 'gemini-2.5-flash', 
-    name: '普通のLLM (Gemini 2.5 Flash)', 
-    description: '速度と精度のバランスに優れた標準モデルです。' 
-  },
-  { 
-    id: 'gemini-2.5-flash-lite', 
-    name: 'コスパ良いLLM (Gemini 2.5 Flash Lite)', 
-    description: 'コストパフォーマンスと応答速度に優れたモデルです。' 
-  },
-];
 
 const COLORS = {
   AI_OPTIMAL: {
@@ -114,24 +83,6 @@ const SAMPLE_TASKS_EN = [
   "Hold a briefing session for related departments"
 ];
 
-// JSON Schema Definition for Gemini
-const ANALYSIS_SCHEMA = {
-  type: SchemaType.ARRAY,
-  items: {
-    type: SchemaType.OBJECT,
-    properties: {
-      task: { type: SchemaType.STRING },
-      category: { 
-        type: SchemaType.STRING, 
-        enum: ["AI_OPTIMAL", "HYBRID", "HUMAN_ESSENTIAL"] 
-      },
-      reason: { type: SchemaType.STRING },
-      prescription: { type: SchemaType.STRING }
-    },
-    required: ["task", "category", "reason", "prescription"]
-  }
-};
-
 // --- Localization Dictionary ---
 const TRANSLATIONS = {
   ja: {
@@ -146,14 +97,14 @@ const TRANSLATIONS = {
       </>
     ),
     security_badge: '高セキュリティ設計',
-    security_detail: '入力データ・APIキーはサーバーへ保存されません。ブラウザからGoogleへ直接送信されます。',
+    security_detail: '入力データとAPIキーは、ブラウザから選択したAI事業者へ直接送信されます。当ツールのサーバーへは保存されません。',
     model_badge: '最適化モデル搭載',
     model_detail: '選択中のモデル:',
     config_title: 'System Configuration',
-    api_label: 'Google Gemini API Key',
+    api_label: 'LLM APIキー',
     api_warning: '⚠️ 共用PCでは使用後に削除してください',
-    api_placeholder: 'APIキーを入力',
-    model_label: 'AI Model Selection',
+    api_placeholder: '選択した事業者のAPIキーを入力',
+    model_label: 'AI事業者・モデル',
     context_title: '業務概要（コンテキスト）',
     sample_btn: 'サンプルを入力',
     context_placeholder: '例：全社キックオフミーティングの企画・運営業務',
@@ -175,15 +126,15 @@ const TRANSLATIONS = {
     cat_hybrid: '協働 (HYBRID)',
     cat_human: '人間必須 (HUMAN)',
     // Errors
-    err_api: 'Gemini APIキーを入力してください。',
+    err_api: '選択した事業者のAPIキーを入力してください。',
     err_task: 'タスクを少なくとも1つ入力してください。',
     err_general: '分析エラーが発生しました。',
     err_404: 'モデルが見つかりません。',
     // Model Translations (Fallback to original constant if used)
     models: {
-       'gemini-2.5-pro': { name: '賢いLLM (Gemini 2.5 Pro)', desc: '最高精度。複雑な文脈理解に最適です。' },
-       'gemini-2.5-flash': { name: '普通のLLM (Gemini 2.5 Flash)', desc: '速度と精度のバランスに優れた標準モデルです。' },
-       'gemini-2.5-flash-lite': { name: 'コスパ良いLLM (Gemini 2.5 Flash Lite)', desc: 'コストパフォーマンスと応答速度に優れたモデルです。' },
+       openai: { name: 'OpenAI / GPT-6 Luna', desc: '低コストで業務の分類や構造化出力に対応するモデルです。' },
+       gemini: { name: 'Google / Gemini 3.5 Flash-Lite', desc: '応答速度とコストを重視した軽量モデルです。' },
+       anthropic: { name: 'Anthropic / Claude Haiku 5.5', desc: '短い文章の分類や抽出を低コストで行うモデルです。' },
     }
   },
   en: {
@@ -198,14 +149,14 @@ const TRANSLATIONS = {
       </>
     ),
     security_badge: 'High Security Design',
-    security_detail: 'Input data and API keys are NOT stored on the server. Sent directly from browser to Google.',
+    security_detail: 'Input data and the selected API key go directly from your browser to the chosen AI provider. They are not stored on this tool’s server.',
     model_badge: 'Optimization Model',
     model_detail: 'Selected Model:',
     config_title: 'System Configuration',
-    api_label: 'Google Gemini API Key',
+    api_label: 'LLM API Key',
     api_warning: '⚠️ Remove after use on shared PCs',
-    api_placeholder: 'Enter API Key',
-    model_label: 'AI Model Selection',
+    api_placeholder: 'Enter the selected provider’s API key',
+    model_label: 'AI Provider / Model',
     context_title: 'Business Context',
     sample_btn: 'Load Sample',
     context_placeholder: 'Ex: Planning and organizing a company-wide kickoff meeting',
@@ -227,15 +178,15 @@ const TRANSLATIONS = {
     cat_hybrid: 'Hybrid',
     cat_human: 'Human Essential',
     // Errors
-    err_api: 'Please enter your Gemini API Key.',
+    err_api: 'Please enter the selected provider’s API key.',
     err_task: 'Please enter at least one task.',
     err_general: 'An analysis error occurred.',
     err_404: 'Model not found.',
     // Model Translations for English Mode
     models: {
-       'gemini-2.5-pro': { name: 'Smart LLM (Gemini 2.5 Pro)', desc: 'Highest accuracy. Best for complex context understanding.' },
-       'gemini-2.5-flash': { name: 'Standard LLM (Gemini 2.5 Flash)', desc: 'Balanced speed and accuracy standard model.' },
-       'gemini-2.5-flash-lite': { name: 'Cost-effective LLM (Gemini 2.5 Flash Lite)', desc: 'Excellent cost performance and response speed.' },
+       openai: { name: 'OpenAI / GPT-6 Luna', desc: 'A low-cost model for task classification and structured output.' },
+       gemini: { name: 'Google / Gemini 3.5 Flash-Lite', desc: 'A lightweight model focused on low cost and fast responses.' },
+       anthropic: { name: 'Anthropic / Claude Haiku 5.5', desc: 'A low-cost model for short-text classification and extraction.' },
     }
   }
 };
@@ -331,8 +282,11 @@ const TaskRow = ({ item, index, onUpdate, onDelete, onEnter, isLast, placeholder
 
 export default function App() {
   const [lang, setLang] = useState<Language>('ja');
-  const [apiKey, setApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState<string>(AI_MODELS[1].id); // Default: gemini-2.5-flash
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>('gemini');
+  // Keep credentials separate by provider and only in component memory.
+  const [apiKeys, setApiKeys] = useState<Record<AIProvider, string>>({ openai: '', gemini: '', anthropic: '' });
+  const apiKey = apiKeys[selectedProvider];
+  const setApiKey = (value: string) => setApiKeys(keys => ({ ...keys, [selectedProvider]: value }));
   const [context, setContext] = useState('');
   const [tasks, setTasks] = useState<TaskItem[]>([{ id: '1', content: '' }]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -372,7 +326,7 @@ export default function App() {
   const handleAnalyze = async () => {
     const validTasks = tasks.filter(t => t.content.trim() !== '').map(t => t.content);
     
-    if (!apiKey) return setError(t.err_api);
+    if (!apiKey.trim()) return setError(t.err_api);
     if (validTasks.length === 0) return setError(t.err_task);
 
     setIsAnalyzing(true);
@@ -380,16 +334,6 @@ export default function App() {
     setResults(null);
 
     try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      
-      const model = genAI.getGenerativeModel({ 
-        model: selectedModel,
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: ANALYSIS_SCHEMA
-        }
-      });
-      
       const promptText = `
 【Business Context】
 ${context || 'None specified'}
@@ -398,31 +342,26 @@ ${context || 'None specified'}
 ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
       `;
       
-      // Pass the language to getSystemPrompt to instruct AI language output
-      const result = await model.generateContent([getSystemPrompt(lang), promptText]);
-      const text = result.response.text();
-      
-      const parsedData = JSON.parse(text);
-      setResults(parsedData);
+      const parsedData = await generateJson({
+        provider: selectedProvider,
+        apiKey,
+        systemPrompt: getSystemPrompt(lang) + '\nReturn an object with an items array. Keep one result per task in the original input order. Copy each task text verbatim without its list number.',
+        input: promptText,
+        schema: ANALYSIS_SCHEMA,
+        schemaName: 'business_process_analysis',
+        maxOutputTokens: 8192
+      });
+      setResults(readAnalysis(parsedData, validTasks));
 
-    } catch (err: any) {
-      console.error(err);
-      let msg = t.err_general;
-      if (err.message.includes('API key')) msg = t.err_api;
-      else if (err.message.includes('404')) msg = `${t.err_404} (${selectedModel})`;
-      else msg += ` (${err.message})`;
-      setError(msg);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '';
+      setError(message ? t.err_general + ' (' + message + ')' : t.err_general);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // 選択されたモデル情報を取得（元の定数から）
-  const currentModelOriginal = AI_MODELS.find(m => m.id === selectedModel);
-  
-  // 翻訳辞書に該当IDがあればそちらを、なければ元の定数情報を使用
-  // anyキャストで動的なキーアクセスを許可
-  const translatedModel = (t.models as any)[selectedModel] || { name: currentModelOriginal?.name, desc: currentModelOriginal?.description };
+  const translatedModel = t.models[selectedProvider];
 
   // Helper to get category label based on current language
   const getCategoryLabel = (cat: Category) => {
@@ -560,12 +499,14 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                           type="password"
                           value={apiKey}
                           onChange={(e) => setApiKey(e.target.value)}
+                          disabled={isAnalyzing}
                           placeholder={t.api_placeholder}
                           className="w-full bg-white border border-slate-300 px-4 py-2 text-sm outline-none focus:border-black transition-colors font-mono pr-10"
                       />
                       {apiKey && (
                         <button 
                           onClick={() => setApiKey('')}
+                          disabled={isAnalyzing}
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500 transition-colors p-1"
                           title="Clear API Key"
                         >
@@ -582,14 +523,15 @@ ${validTasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
                     </label>
                     <div className="relative">
                       <select
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value)}
+                        value={selectedProvider}
+                        onChange={(e) => setSelectedProvider(e.target.value as AIProvider)}
+                        disabled={isAnalyzing || results !== null}
                         className="w-full bg-white border border-slate-300 px-4 py-2 text-sm outline-none focus:border-black transition-colors appearance-none cursor-pointer font-medium"
                       >
-                        {AI_MODELS.map(model => (
+                        {AI_PROVIDERS.map(model => (
                           <option key={model.id} value={model.id}>
                             {/* 表示テキストを言語設定に合わせて切り替え */}
-                            {(t.models as any)[model.id]?.name || model.name}
+                            {t.models[model.id].name}
                           </option>
                         ))}
                       </select>
